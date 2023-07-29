@@ -5,6 +5,7 @@ def register(name):
     def decorator(cls):
         datasets[name] = cls
         return cls
+
     return decorator
 
 
@@ -13,4 +14,4 @@ def make(name, config):
     return dataset
 
 
-from . import blender, colmap, dtu
+from . import blender, colmap, dtu, objaverse, oppo, onepose, oneposev2, hope

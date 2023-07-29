@@ -4,6 +4,7 @@ import shutil
 import numpy as np
 import cv2
 import imageio
+from wis3d import Wis3D
 from matplotlib import cm
 from matplotlib.colors import LinearSegmentedColormap
 import json
@@ -17,7 +18,7 @@ class SaverMixin():
     @property
     def save_dir(self):
         return self.config.save_dir
-    
+
     def convert_data(self, data):
         if isinstance(data, np.ndarray):
             return data
@@ -29,12 +30,12 @@ class SaverMixin():
             return {k: self.convert_data(v) for k, v in data.items()}
         else:
             raise TypeError('Data must be in type numpy.ndarray, torch.Tensor, list or dict, getting', type(data))
-    
+
     def get_save_path(self, filename):
         save_path = os.path.join(self.save_dir, filename)
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         return save_path
-    
+
     DEFAULT_RGB_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1)}
     DEFAULT_UV_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1), 'cmap': 'checkerboard'}
     DEFAULT_GRAYSCALE_KWARGS = {'data_range': None, 'cmap': 'jet'}
@@ -46,16 +47,19 @@ class SaverMixin():
             img = img.transpose(1, 2, 0)
         img = img.clip(min=data_range[0], max=data_range[1])
         img = ((img - data_range[0]) / (data_range[1] - data_range[0]) * 255.).astype(np.uint8)
-        imgs = [img[...,start:start+3] for start in range(0, img.shape[-1], 3)]
-        imgs = [img_ if img_.shape[-1] == 3 else np.concatenate([img_, np.zeros((img_.shape[0], img_.shape[1], 3 - img_.shape[2]), dtype=img_.dtype)], axis=-1) for img_ in imgs]
+        imgs = [img[..., start:start + 3] for start in range(0, img.shape[-1], 3)]
+        imgs = [img_ if img_.shape[-1] == 3 else np.concatenate(
+            [img_, np.zeros((img_.shape[0], img_.shape[1], 3 - img_.shape[2]), dtype=img_.dtype)], axis=-1) for img_ in
+                imgs]
         img = np.concatenate(imgs, axis=1)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         return img
-    
-    def save_rgb_image(self, filename, img, data_format=DEFAULT_RGB_KWARGS['data_format'], data_range=DEFAULT_RGB_KWARGS['data_range']):
+
+    def save_rgb_image(self, filename, img, data_format=DEFAULT_RGB_KWARGS['data_format'],
+                       data_range=DEFAULT_RGB_KWARGS['data_range']):
         img = self.get_rgb_image_(img, data_format, data_range)
         cv2.imwrite(self.get_save_path(filename), img)
-    
+
     def get_uv_image_(self, img, data_format, data_range, cmap):
         img = self.convert_data(img)
         assert data_format in ['CHW', 'HWC']
@@ -67,7 +71,7 @@ class SaverMixin():
         if cmap == 'checkerboard':
             n_grid = 64
             mask = (img * n_grid).astype(int)
-            mask = (mask[...,0] + mask[...,1]) % 2 == 0
+            mask = (mask[..., 0] + mask[..., 1]) % 2 == 0
             img = np.ones((img.shape[0], img.shape[1], 3), dtype=np.uint8) * 255
             img[mask] = np.array([255, 0, 255], dtype=np.uint8)
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -78,8 +82,9 @@ class SaverMixin():
             img_ = cv2.cvtColor(img_, cv2.COLOR_RGB2BGR)
             img = img_
         return img
-    
-    def save_uv_image(self, filename, img, data_format=DEFAULT_UV_KWARGS['data_format'], data_range=DEFAULT_UV_KWARGS['data_range'], cmap=DEFAULT_UV_KWARGS['cmap']):
+
+    def save_uv_image(self, filename, img, data_format=DEFAULT_UV_KWARGS['data_format'],
+                      data_range=DEFAULT_UV_KWARGS['data_range'], cmap=DEFAULT_UV_KWARGS['cmap']):
         img = self.get_uv_image_(img, data_format, data_range, cmap)
         cv2.imwrite(self.get_save_path(filename), img)
 
@@ -94,7 +99,7 @@ class SaverMixin():
         assert cmap in [None, 'jet', 'magma']
         if cmap == None:
             img = (img * 255.).astype(np.uint8)
-            img = np.repeat(img[...,None], 3, axis=2)
+            img = np.repeat(img[..., None], 3, axis=2)
         elif cmap == 'jet':
             img = (img * 255.).astype(np.uint8)
             img = cv2.applyColorMap(img, cv2.COLORMAP_JET)
@@ -106,17 +111,18 @@ class SaverMixin():
                 f"{base.name}{num_bins}",
                 base(np.linspace(0, 1, num_bins)),
                 num_bins
-            )(np.linspace(0, 1, num_bins))[:,:3]
+            )(np.linspace(0, 1, num_bins))[:, :3]
             a = np.floor(img * 255.)
             b = (a + 1).clip(max=255.)
             f = img * 255. - a
             a = a.astype(np.uint16).clip(0, 255)
             b = b.astype(np.uint16).clip(0, 255)
-            img = colormap[a] + (colormap[b] - colormap[a]) * f[...,None]
+            img = colormap[a] + (colormap[b] - colormap[a]) * f[..., None]
             img = (img * 255.).astype(np.uint8)
         return img
 
-    def save_grayscale_image(self, filename, img, data_range=DEFAULT_GRAYSCALE_KWARGS['data_range'], cmap=DEFAULT_GRAYSCALE_KWARGS['cmap']):
+    def save_grayscale_image(self, filename, img, data_range=DEFAULT_GRAYSCALE_KWARGS['data_range'],
+                             cmap=DEFAULT_GRAYSCALE_KWARGS['cmap']):
         img = self.get_grayscale_image_(img, data_range, cmap)
         cv2.imwrite(self.get_save_path(filename), img)
 
@@ -139,11 +145,11 @@ class SaverMixin():
                 grayscale_kwargs.update(col['kwargs'])
                 cols.append(self.get_grayscale_image_(col['img'], **grayscale_kwargs))
         return np.concatenate(cols, axis=1)
-    
+
     def save_image_grid(self, filename, imgs):
         img = self.get_image_grid_(imgs)
         cv2.imwrite(self.get_save_path(filename), img)
-    
+
     def save_image(self, filename, img):
         img = self.convert_data(img)
         assert img.dtype == np.uint8
@@ -152,14 +158,14 @@ class SaverMixin():
         elif img.shape[-1] == 4:
             img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
         cv2.imwrite(self.get_save_path(filename), img)
-    
+
     def save_cubemap(self, filename, img, data_range=(0, 1)):
         img = self.convert_data(img)
         assert img.ndim == 4 and img.shape[0] == 6 and img.shape[1] == img.shape[2]
 
         imgs_full = []
         for start in range(0, img.shape[-1], 3):
-            img_ = img[...,start:start+3]
+            img_ = img[..., start:start + 3]
             img_ = np.stack([self.get_rgb_image_(img_[i], 'HWC', data_range) for i in range(img_.shape[0])], axis=0)
             size = img_.shape[1]
             placeholder = np.zeros((size, size, 3), dtype=np.float32)
@@ -170,7 +176,7 @@ class SaverMixin():
             ], axis=0)
             img_full = cv2.cvtColor(img_full, cv2.COLOR_RGB2BGR)
             imgs_full.append(img_full)
-        
+
         imgs_full = np.concatenate(imgs_full, axis=1)
         cv2.imwrite(self.get_save_path(filename), imgs_full)
 
@@ -184,10 +190,10 @@ class SaverMixin():
             if not filename.endswith('.npy'):
                 filename += '.npy'
             np.save(self.get_save_path(filename), data)
-        
+
     def save_state_dict(self, filename, data):
         torch.save(data, self.get_save_path(filename))
-    
+
     def save_img_sequence(self, filename, img_dir, matcher, save_format='gif', fps=30):
         assert save_format in ['gif', 'mp4']
         if not filename.endswith(save_format):
@@ -200,14 +206,14 @@ class SaverMixin():
                 imgs.append(f)
         imgs = sorted(imgs, key=lambda f: int(matcher.search(f).groups()[0]))
         imgs = [cv2.imread(os.path.join(img_dir, f)) for f in imgs]
-        
+
         if save_format == 'gif':
             imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in imgs]
             imageio.mimsave(self.get_save_path(filename), imgs, fps=fps, palettesize=256)
         elif save_format == 'mp4':
             imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in imgs]
             imageio.mimsave(self.get_save_path(filename), imgs, fps=fps)
-    
+
     def save_mesh(self, filename, v_pos, t_pos_idx, v_tex=None, t_tex_idx=None, v_rgb=None):
         v_pos, t_pos_idx = self.convert_data(v_pos), self.convert_data(t_pos_idx)
         if v_rgb is not None:
@@ -219,11 +225,22 @@ class SaverMixin():
             faces=t_pos_idx,
             vertex_colors=v_rgb
         )
+        vis3d = Wis3D(
+            xyz_pattern=('x', 'y', 'z'),
+            out_folder="dbg",
+            sequence_name="save_mesh",
+            # auto_increase=,
+            # enable=,
+        )
+        vis3d.add_mesh(mesh)
+        box_scales = np.arange(0.1, 1.1, 0.1)
+        for s in box_scales:
+            vis3d.add_box_by_6border(-s / 2, -s / 2, -s / 2, s / 2, s / 2, s / 2, name=f"box_{s}")
         mesh.export(self.get_save_path(filename))
-    
+
     def save_file(self, filename, src_path):
         shutil.copyfile(src_path, self.get_save_path(filename))
-    
+
     def save_json(self, filename, payload):
         with open(self.get_save_path(filename), 'w') as f:
             f.write(json.dumps(payload))

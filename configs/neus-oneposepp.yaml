@@ -1,24 +1,24 @@
-name: neus-blender-${dataset.scene}
+name: neus-onepose-${dataset.scene}
 tag: ''
 seed: 42
 
 dataset:
-  name: blender
+  name: onepose
   scene: ???
-  root_dir: ./load/nerf_synthetic/${dataset.scene}
+  root_dir: /home/linghao/Datasets/onepose_datasets
   img_wh:
-    - 800
-    - 800
+    - 512
+    - 512
   # img_downscale: 1 # specify training image size by either img_wh or img_downscale
-  near_plane: 2.0
-  far_plane: 6.0
+  near_plane: 0.05
+  far_plane: 2.0
   train_split: 'train'
-  val_split: 'val'
+  val_split: 'test'
   test_split: 'test'
 
 model:
   name: neus
-  radius: 1.5
+  radius: 1.0
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192

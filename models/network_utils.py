@@ -5,11 +5,12 @@ import torch
 import torch.nn as nn
 import tinycudann as tcnn
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug
+from pytorch_lightning.utilities.distributed import rank_zero_debug
 
 from utils.misc import config_to_primitive, get_rank
 from models.utils import get_activation
 from systems.utils import update_module_step
+
 
 class VanillaFrequency(nn.Module):
     def __init__(self, in_channels, config):
@@ -17,17 +18,17 @@ class VanillaFrequency(nn.Module):
         self.N_freqs = config['n_frequencies']
         self.in_channels, self.n_input_dims = in_channels, in_channels
         self.funcs = [torch.sin, torch.cos]
-        self.freq_bands = 2**torch.linspace(0, self.N_freqs-1, self.N_freqs)
+        self.freq_bands = 2 ** torch.linspace(0, self.N_freqs - 1, self.N_freqs)
         self.n_output_dims = self.in_channels * (len(self.funcs) * self.N_freqs)
         self.n_masking_step = config.get('n_masking_step', 0)
-        self.update_step(None, None) # mask should be updated at the beginning each step
+        self.update_step(None, None)  # mask should be updated at the beginning each step
 
     def forward(self, x):
         out = []
         for freq, mask in zip(self.freq_bands, self.mask):
             for func in self.funcs:
-                out += [func(freq*x) * mask]                
-        return torch.cat(out, -1)          
+                out += [func(freq * x) * mask]
+        return torch.cat(out, -1)
 
     def update_step(self, epoch, global_step):
         if self.n_masking_step <= 0 or global_step is None:
@@ -71,7 +72,7 @@ class CompositeEncoding(nn.Module):
         self.encoding = encoding
         self.include_xyz, self.xyz_scale, self.xyz_offset = include_xyz, xyz_scale, xyz_offset
         self.n_output_dims = int(self.include_xyz) * self.encoding.n_input_dims + self.encoding.n_output_dims
-    
+
     def forward(self, x, *args):
         return self.encoding(x, *args) if not self.include_xyz else torch.cat([x * self.xyz_scale + self.xyz_offset, self.encoding(x, *args)], dim=-1)
 
@@ -104,14 +105,14 @@ class VanillaMLP(nn.Module):
         self.layers += [self.make_linear(self.n_neurons, dim_out, is_first=False, is_last=True)]
         self.layers = nn.Sequential(*self.layers)
         self.output_activation = get_activation(config['output_activation'])
-    
+
     def forward(self, x):
         x = self.layers(x.float())
         x = self.output_activation(x)
         return x
-    
+
     def make_linear(self, dim_in, dim_out, is_first, is_last):
-        layer = nn.Linear(dim_in, dim_out, bias=True) # network without bias will degrade quality
+        layer = nn.Linear(dim_in, dim_out, bias=True)  # network without bias will degrade quality
         if self.sphere_init:
             if is_last:
                 torch.nn.init.constant_(layer.bias, -self.sphere_init_radius)
@@ -126,10 +127,10 @@ class VanillaMLP(nn.Module):
         else:
             torch.nn.init.constant_(layer.bias, 0.0)
             torch.nn.init.kaiming_uniform_(layer.weight, nonlinearity='relu')
-        
+
         if self.weight_norm:
             layer = nn.utils.weight_norm(layer)
-        return layer   
+        return layer
 
     def make_activation(self):
         if self.sphere_init:
@@ -152,7 +153,7 @@ def sphere_init_tcnn_network(n_input_dims, n_output_dims, config, network):
     n_input_dims = n_input_dims + (padto - n_input_dims % padto) % padto
     n_output_dims = n_output_dims + (padto - n_output_dims % padto) % padto
     data = list(network.parameters())[0].data
-    assert data.shape[0] == (n_input_dims + n_output_dims) * config.n_neurons + (config.n_hidden_layers - 1) * config.n_neurons**2
+    assert data.shape[0] == (n_input_dims + n_output_dims) * config.n_neurons + (config.n_hidden_layers - 1) * config.n_neurons ** 2
     new_data = []
     # first layer
     weight = torch.zeros((config.n_neurons, n_input_dims)).to(data)
@@ -187,10 +188,10 @@ class EncodingWithNetwork(nn.Module):
     def __init__(self, encoding, network):
         super().__init__()
         self.encoding, self.network = encoding, network
-    
+
     def forward(self, x):
         return self.network(self.encoding(x))
-    
+
     def update_step(self, epoch, global_step):
         update_module_step(self.encoding, epoch, global_step)
         update_module_step(self.network, epoch, global_step)
@@ -199,7 +200,7 @@ class EncodingWithNetwork(nn.Module):
 def get_encoding_with_network(n_input_dims, n_output_dims, encoding_config, network_config):
     # input suppose to be range [0, 1]
     if encoding_config.otype in ['VanillaFrequency', 'ProgressiveBandHashGrid'] \
-        or network_config.otype in ['VanillaMLP']:
+            or network_config.otype in ['VanillaMLP']:
         encoding = get_encoding(n_input_dims, encoding_config)
         network = get_mlp(encoding.n_output_dims, n_output_dims, network_config)
         encoding_with_network = EncodingWithNetwork(encoding, network)

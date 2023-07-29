@@ -43,7 +43,9 @@ class MarchingCubeHelper(nn.Module):
 
     def grid_vertices(self):
         if self.verts is None:
-            x, y, z = torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution)
+            x, y, z = torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range,
+                                                                                          self.resolution), torch.linspace(
+                *self.points_range, self.resolution)
             x, y, z = torch.meshgrid(x, y, z, indexing='ij')
             verts = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1), z.reshape(-1, 1)], dim=-1).reshape(-1, 3)
             self.verts = verts
@@ -55,8 +57,9 @@ class MarchingCubeHelper(nn.Module):
             verts, faces = self.mc_func(level.to(get_rank()), threshold)
             verts, faces = verts.cpu(), faces.cpu().long()
         else:
-            verts, faces = self.mc_func(-level.numpy(), threshold) # transform to numpy
-            verts, faces = torch.from_numpy(verts.astype(np.float32)), torch.from_numpy(faces.astype(np.int64)) # transform back to pytorch
+            verts, faces = self.mc_func(-level.numpy(), threshold)  # transform to numpy
+            verts, faces = torch.from_numpy(verts.astype(np.float32)), torch.from_numpy(
+                faces.astype(np.int64))  # transform back to pytorch
         verts = verts / (self.resolution - 1.)
         return {
             'v_pos': verts,
@@ -70,31 +73,33 @@ class BaseImplicitGeometry(BaseModel):
         if self.config.isosurface is not None:
             assert self.config.isosurface.method in ['mc', 'mc-torch']
             if self.config.isosurface.method == 'mc-torch':
-                raise NotImplementedError("Please do not use mc-torch. It currently has some scaling issues I haven't fixed yet.")
-            self.helper = MarchingCubeHelper(self.config.isosurface.resolution, use_torch=self.config.isosurface.method=='mc-torch')   
+                raise NotImplementedError(
+                    "Please do not use mc-torch. It currently has some scaling issues I haven't fixed yet.")
+            self.helper = MarchingCubeHelper(self.config.isosurface.resolution,
+                                             use_torch=self.config.isosurface.method == 'mc-torch')
         self.radius = self.config.radius
-        self.contraction_type = None # assigned in system
+        self.contraction_type = None  # assigned in system
 
     def forward_level(self, points):
         raise NotImplementedError
-    
+
     def isosurface_(self, vmin, vmax):
         def batch_func(x):
             x = torch.stack([
-                scale_anything(x[...,0], (0, 1), (vmin[0], vmax[0])),
-                scale_anything(x[...,1], (0, 1), (vmin[1], vmax[1])),
-                scale_anything(x[...,2], (0, 1), (vmin[2], vmax[2])),
+                scale_anything(x[..., 0], (0, 1), (vmin[0], vmax[0])),
+                scale_anything(x[..., 1], (0, 1), (vmin[1], vmax[1])),
+                scale_anything(x[..., 2], (0, 1), (vmin[2], vmax[2])),
             ], dim=-1).to(self.rank)
             rv = self.forward_level(x).cpu()
             cleanup()
             return rv
-        
+
         level = chunk_batch(batch_func, self.config.isosurface.chunk, True, self.helper.grid_vertices())
         mesh = self.helper(level, threshold=self.config.isosurface.threshold)
         mesh['v_pos'] = torch.stack([
-            scale_anything(mesh['v_pos'][...,0], (0, 1), (vmin[0], vmax[0])),
-            scale_anything(mesh['v_pos'][...,1], (0, 1), (vmin[1], vmax[1])),
-            scale_anything(mesh['v_pos'][...,2], (0, 1), (vmin[2], vmax[2]))
+            scale_anything(mesh['v_pos'][..., 0], (0, 1), (vmin[0], vmax[0])),
+            scale_anything(mesh['v_pos'][..., 1], (0, 1), (vmin[1], vmax[1])),
+            scale_anything(mesh['v_pos'][..., 2], (0, 1), (vmin[2], vmax[2]))
         ], dim=-1)
         return mesh
 
@@ -102,12 +107,13 @@ class BaseImplicitGeometry(BaseModel):
     def isosurface(self):
         if self.config.isosurface is None:
             raise NotImplementedError
-        mesh_coarse = self.isosurface_((-self.radius, -self.radius, -self.radius), (self.radius, self.radius, self.radius))
+        mesh_coarse = self.isosurface_((-self.radius, -self.radius, -self.radius),
+                                       (self.radius, self.radius, self.radius))
         vmin, vmax = mesh_coarse['v_pos'].amin(dim=0), mesh_coarse['v_pos'].amax(dim=0)
         vmin_ = (vmin - (vmax - vmin) * 0.1).clamp(-self.radius, self.radius)
         vmax_ = (vmax + (vmax - vmin) * 0.1).clamp(-self.radius, self.radius)
         mesh_fine = self.isosurface_(vmin_, vmax_)
-        return mesh_fine 
+        return mesh_fine
 
 
 @models.register('volume-density')
@@ -115,25 +121,29 @@ class VolumeDensity(BaseImplicitGeometry):
     def setup(self):
         self.n_input_dims = self.config.get('n_input_dims', 3)
         self.n_output_dims = self.config.feature_dim
-        self.encoding_with_network = get_encoding_with_network(self.n_input_dims, self.n_output_dims, self.config.xyz_encoding_config, self.config.mlp_network_config)
-    
+        self.encoding_with_network = get_encoding_with_network(self.n_input_dims, self.n_output_dims,
+                                                               self.config.xyz_encoding_config,
+                                                               self.config.mlp_network_config)
+
     def forward(self, points):
         points = contract_to_unisphere(points, self.radius, self.contraction_type)
-        out = self.encoding_with_network(points.view(-1, self.n_input_dims)).view(*points.shape[:-1], self.n_output_dims).float()
-        density, feature = out[...,0], out
+        out = self.encoding_with_network(points.view(-1, self.n_input_dims)).view(*points.shape[:-1],
+                                                                                  self.n_output_dims).float()
+        density, feature = out[..., 0], out
         if 'density_activation' in self.config:
             density = get_activation(self.config.density_activation)(density + float(self.config.density_bias))
         if 'feature_activation' in self.config:
             feature = get_activation(self.config.feature_activation)(feature)
         return density, feature
-    
+
     def forward_level(self, points):
         points = contract_to_unisphere(points, self.radius, self.contraction_type)
-        density = self.encoding_with_network(points.reshape(-1, self.n_input_dims)).reshape(*points.shape[:-1], self.n_output_dims)[...,0]
+        density = self.encoding_with_network(points.reshape(-1, self.n_input_dims)).reshape(*points.shape[:-1],
+                                                                                            self.n_output_dims)[..., 0]
         if 'density_activation' in self.config:
             density = get_activation(self.config.density_activation)(density + float(self.config.density_bias))
-        return -density      
-    
+        return -density
+
     def update_step(self, epoch, global_step):
         update_module_step(self.encoding_with_network, epoch, global_step)
 
@@ -146,24 +156,27 @@ class VolumeSDF(BaseImplicitGeometry):
         network = get_mlp(encoding.n_output_dims, self.n_output_dims, self.config.mlp_network_config)
         self.encoding, self.network = encoding, network
         self.grad_type = self.config.grad_type
-    
+
     def forward(self, points, with_grad=True, with_feature=True):
-        with torch.inference_mode(torch.is_inference_mode_enabled() and not (with_grad and self.grad_type == 'analytic')):
+        with torch.inference_mode(
+                torch.is_inference_mode_enabled() and not (with_grad and self.grad_type == 'analytic')):
             with torch.set_grad_enabled(self.training or (with_grad and self.grad_type == 'analytic')):
                 if with_grad and self.grad_type == 'analytic':
                     if not self.training:
-                        points = points.clone() # points may be in inference mode, get a copy to enable grad
+                        points = points.clone()  # points may be in inference mode, get a copy to enable grad
                     points.requires_grad_(True)
 
-                points_ = points # points in the original scale
-                points = contract_to_unisphere(points, self.radius, self.contraction_type) # points normalized to (0, 1)
-                
-                out = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims).float()
-                sdf, feature = out[...,0], out
+                points_ = points  # points in the original scale
+                points = contract_to_unisphere(points, self.radius,
+                                               self.contraction_type)  # points normalized to (0, 1)
+
+                out = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1],
+                                                                           self.n_output_dims).float()
+                sdf, feature = out[..., 0], out
                 if 'sdf_activation' in self.config:
                     sdf = get_activation(self.config.sdf_activation)(sdf + float(self.config.sdf_bias))
                 if 'feature_activation' in self.config:
-                    feature = get_activation(self.config.feature_activation)(feature)               
+                    feature = get_activation(self.config.feature_activation)(feature)
                 if with_grad:
                     if self.grad_type == 'analytic':
                         grad = torch.autograd.grad(
@@ -181,7 +194,8 @@ class VolumeSDF(BaseImplicitGeometry):
                             points_ + torch.as_tensor([0.0, 0.0, -eps]).to(points_)
                         ], dim=0).clamp(0, 1)
                         points_d = scale_anything(points_d_, (-self.radius, self.radius), (0, 1))
-                        points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[...,0].view(6, *points.shape[:-1]).float()
+                        points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[..., 0].view(6, *points.shape[
+                                                                                                          :-1]).float()
                         grad = torch.stack([
                             0.5 * (points_d_sdf[0] - points_d_sdf[1]) / eps,
                             0.5 * (points_d_sdf[2] - points_d_sdf[3]) / eps,
@@ -195,14 +209,14 @@ class VolumeSDF(BaseImplicitGeometry):
             rv.append(feature)
         rv = [v if self.training else v.detach() for v in rv]
         return rv[0] if len(rv) == 1 else rv
-    
+
     def forward_level(self, points):
-        points = contract_to_unisphere(points, self.radius, self.contraction_type) # points normalized to (0, 1)
-        sdf = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims)[...,0]
+        points = contract_to_unisphere(points, self.radius, self.contraction_type)  # points normalized to (0, 1)
+        sdf = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims)[..., 0]
         if 'sdf_activation' in self.config:
             sdf = get_activation(self.config.sdf_activation)(sdf + float(self.config.sdf_bias))
-        return sdf        
-    
+        return sdf
+
     def update_step(self, epoch, global_step):
-        update_module_step(self.encoding, epoch, global_step)    
-        update_module_step(self.network, epoch, global_step)    
+        update_module_step(self.encoding, epoch, global_step)
+        update_module_step(self.network, epoch, global_step)

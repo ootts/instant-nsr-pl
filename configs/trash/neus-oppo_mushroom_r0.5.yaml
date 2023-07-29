@@ -1,24 +1,24 @@
-name: neus-blender-${dataset.scene}
+name: neus-oppo_mushroom_r0.5
 tag: ''
 seed: 42
 
 dataset:
-  name: blender
+  name: oppo
   scene: ???
-  root_dir: ./load/nerf_synthetic/${dataset.scene}
+  root_dir: /home/linghao/Datasets/oppo/0524/mushroom/output
   img_wh:
-    - 800
-    - 800
+    - 2656
+    - 3984
   # img_downscale: 1 # specify training image size by either img_wh or img_downscale
-  near_plane: 2.0
-  far_plane: 6.0
+  near_plane: 0.1
+  far_plane: 2.0
   train_split: 'train'
   val_split: 'val'
   test_split: 'test'
 
 model:
   name: neus
-  radius: 1.5
+  radius: 0.3
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192
@@ -80,7 +80,7 @@ system:
   loss:
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
-    lambda_mask: 0.1
+    lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_sparsity: 0.01
     lambda_distortion: 0.

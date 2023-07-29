@@ -3,7 +3,7 @@ import pprint
 import logging
 
 from pytorch_lightning.loggers.base import LightningLoggerBase, rank_zero_experiment
-from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from pytorch_lightning.utilities.distributed import rank_zero_only
 
 
 class ConsoleLogger(LightningLoggerBase):

@@ -1,24 +1,24 @@
-name: neus-blender-${dataset.scene}
+name: neus-oppo-r0.5-${dataset.scene}
 tag: ''
 seed: 42
 
 dataset:
-  name: blender
+  name: oppo
   scene: ???
-  root_dir: ./load/nerf_synthetic/${dataset.scene}
+  root_dir: /home/linghao/Datasets/lightstage_dataset/${dataset.scene}/output
   img_wh:
-    - 800
-    - 800
+    - 2656
+    - 3984
   # img_downscale: 1 # specify training image size by either img_wh or img_downscale
-  near_plane: 2.0
-  far_plane: 6.0
+  near_plane: 0.3
+  far_plane: 2.0
   train_split: 'train'
   val_split: 'val'
   test_split: 'test'
 
 model:
   name: neus
-  radius: 1.5
+  radius: 0.5
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192
@@ -89,16 +89,16 @@ system:
   optimizer:
     name: Adam
     args:
-      lr: 0.01
+      lr: 0.001
       betas: [0.9, 0.99]
       eps: 1.e-15
     params:
       geometry:
-          lr: 0.01
-      texture:
-          lr: 0.01
-      variance:
           lr: 0.001
+      texture:
+          lr: 0.001
+      variance:
+          lr: 0.0001
   warmup_steps: 500
   scheduler:
     name: SequentialLR

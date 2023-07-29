@@ -3,10 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_efficient_distloss import flatten_eff_distloss
 
-import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
-
-import models
 from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
@@ -20,6 +16,7 @@ class NeRFSystem(BaseSystem):
     1. self.print: correctly handle progress bar
     2. rank_zero_info: use the logging module
     """
+
     def prepare(self):
         self.criterions = {
             'psnr': PSNR()
@@ -29,13 +26,14 @@ class NeRFSystem(BaseSystem):
 
     def forward(self, batch):
         return self.model(batch['rays'])
-    
+
     def preprocess_data(self, batch, stage):
-        if 'index' in batch: # validation / testing
+        if 'index' in batch:  # validation / testing
             index = batch['index']
         else:
             if self.config.model.batch_image_sampling:
-                index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,), device=self.dataset.all_images.device)
+                index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,),
+                                      device=self.dataset.all_images.device)
             else:
                 index = torch.randint(0, len(self.dataset.all_images), size=(1,), device=self.dataset.all_images.device)
         if stage in ['train']:
@@ -46,23 +44,23 @@ class NeRFSystem(BaseSystem):
             y = torch.randint(
                 0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
-            if self.dataset.directions.ndim == 3: # (H, W, 3)
+            if self.dataset.directions.ndim == 3:  # (H, W, 3)
                 directions = self.dataset.directions[y, x]
-            elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
+            elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
                 directions = self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
         else:
             c2w = self.dataset.all_c2w[index][0]
-            if self.dataset.directions.ndim == 3: # (H, W, 3)
+            if self.dataset.directions.ndim == 3:  # (H, W, 3)
                 directions = self.dataset.directions
-            elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
+            elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
                 directions = self.dataset.directions[index][0]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
-        
+
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
         if stage in ['train']:
@@ -74,16 +72,16 @@ class NeRFSystem(BaseSystem):
                 raise NotImplementedError
         else:
             self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
-        
+
         if self.dataset.apply_mask:
-            rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])        
-        
+            rgb = rgb * fg_mask[..., None] + self.model.background_color * (1 - fg_mask[..., None])
+
         batch.update({
             'rays': rays,
             'rgb': rgb,
             'fg_mask': fg_mask
         })
-    
+
     def training_step(self, batch, batch_idx):
         out = self(batch)
 
@@ -91,10 +89,11 @@ class NeRFSystem(BaseSystem):
 
         # update train_num_rays
         if self.config.model.dynamic_ray_sampling:
-            train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples'].sum().item()))        
-            self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
-        
-        loss_rgb = F.smooth_l1_loss(out['comp_rgb'][out['rays_valid'][...,0]], batch['rgb'][out['rays_valid'][...,0]])
+            train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples'].sum().item()))
+            self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1),
+                                      self.config.model.max_train_num_rays)
+
+        loss_rgb = F.smooth_l1_loss(out['comp_rgb'][out['rays_valid'][..., 0]], batch['rgb'][out['rays_valid'][..., 0]])
         self.log('train/loss_rgb', loss_rgb)
         loss += loss_rgb * self.C(self.config.system.loss.lambda_rgb)
 
@@ -114,25 +113,25 @@ class NeRFSystem(BaseSystem):
         for name, value in self.config.system.loss.items():
             if name.startswith('lambda'):
                 self.log(f'train_params/{name}', self.C(value))
-        
+
         self.log('train/num_rays', float(self.train_num_rays), prog_bar=True)
 
         return {
             'loss': loss
         }
-    
+
     """
     # aggregate outputs from different devices (DP)
     def training_step_end(self, out):
         pass
     """
-    
+
     """
     # aggregate outputs from different iterations
     def training_epoch_end(self, out):
         pass
     """
-    
+
     def validation_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'].to(batch['rgb']), batch['rgb'])
@@ -147,14 +146,13 @@ class NeRFSystem(BaseSystem):
             'psnr': psnr,
             'index': batch['index']
         }
-          
-    
+
     """
     # aggregate outputs from different devices when using DP
     def validation_step_end(self, out):
         pass
     """
-    
+
     def validation_epoch_end(self, out):
         out = self.all_gather(out)
         if self.trainer.is_global_zero:
@@ -168,9 +166,9 @@ class NeRFSystem(BaseSystem):
                     for oi, index in enumerate(step_out['index']):
                         out_set[index[0].item()] = {'psnr': step_out['psnr'][oi]}
             psnr = torch.mean(torch.stack([o['psnr'] for o in out_set.values()]))
-            self.log('val/psnr', psnr, prog_bar=True, rank_zero_only=True)         
+            self.log('val/psnr', psnr, prog_bar=True, rank_zero_only=True)
 
-    def test_step(self, batch, batch_idx):  
+    def test_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'].to(batch['rgb']), batch['rgb'])
         W, H = self.dataset.img_wh
@@ -183,8 +181,8 @@ class NeRFSystem(BaseSystem):
         return {
             'psnr': psnr,
             'index': batch['index']
-        }      
-    
+        }
+
     def test_epoch_end(self, out):
         out = self.all_gather(out)
         if self.trainer.is_global_zero:
@@ -198,7 +196,7 @@ class NeRFSystem(BaseSystem):
                     for oi, index in enumerate(step_out['index']):
                         out_set[index[0].item()] = {'psnr': step_out['psnr'][oi]}
             psnr = torch.mean(torch.stack([o['psnr'] for o in out_set.values()]))
-            self.log('test/psnr', psnr, prog_bar=True, rank_zero_only=True)    
+            self.log('test/psnr', psnr, prog_bar=True, rank_zero_only=True)
 
             self.save_img_sequence(
                 f"it{self.global_step}-test",
@@ -207,7 +205,7 @@ class NeRFSystem(BaseSystem):
                 save_format='mp4',
                 fps=30
             )
-            
+
             self.export()
 
     def export(self):
@@ -215,4 +213,4 @@ class NeRFSystem(BaseSystem):
         self.save_mesh(
             f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
             **mesh
-        )    
+        )
