@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="sulab" deleteMissingItems="true" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+    <option name="confirmBeforeUploading" value="false" />
+    <serverData>
+      <paths name="Descartes">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/PycharmProjects/instant-nsr-pl" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="chao">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/One2345/linghao/PycharmProjects//instant-nsr-pl" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="linghao@lightstage.ucsd.edu:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/PycharmProjects/instant-nsr-pl" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="sclh">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/PycharmProjects/instant-nsr-pl" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="sjet">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/PycharmProjects/instant-nsr-pl" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

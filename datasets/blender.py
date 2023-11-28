@@ -54,17 +54,17 @@ class BlenderDatasetBase():
                 self.rank)  # (h, w, 3)
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
-        vis3d = Vis3D(
+        wis3d = Wis3D(
             xyz_pattern=('x', 'y', 'z'),
             out_folder="dbg",
-            sequence="blender_loader",
+            sequence_name="blender_loader",
             # auto_increase=,
             # enable=,
         )
         for i, frame in enumerate(meta['frames']):
             c2w = torch.from_numpy(np.array(frame['transform_matrix'])[:3, :4])
             self.all_c2w.append(c2w)
-            vis3d.add_camera_trajectory(torch.cat([c2w, torch.tensor([[0, 0, 0, 1]])], dim=0)[None])
+            wis3d.add_camera_trajectory(torch.cat([c2w, torch.tensor([[0, 0, 0, 1]])], dim=0)[None])
             img_path = os.path.join(self.config.root_dir, f"{frame['file_path']}.png")
             img = Image.open(img_path)
             img = img.resize(self.img_wh, Image.BICUBIC)
@@ -124,7 +124,7 @@ class BlenderDataModule(pl.LightningDataModule):
         sampler = None
         return DataLoader(
             dataset,
-            num_workers=os.cpu_count(),
+            num_workers=os.cpu_count() if 'PYCHARM_HOSTED' not in os.environ else 0,
             batch_size=batch_size,
             pin_memory=True,
             sampler=sampler

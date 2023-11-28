@@ -156,18 +156,6 @@ class NeuSSystem(BaseSystem):
             'loss': loss
         }
 
-    """
-    # aggregate outputs from different devices (DP)
-    def training_step_end(self, out):
-        pass
-    """
-
-    """
-    # aggregate outputs from different iterations
-    def training_epoch_end(self, out):
-        pass
-    """
-
     def validation_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb_full'].to(batch['rgb']), batch['rgb'])

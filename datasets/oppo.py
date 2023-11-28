@@ -55,10 +55,10 @@ class OppoDatasetBase():
         #         self.rank)  # (h, w, 3)
         self.directions = []
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
-        vis3d = Vis3D(
+        wis3d = Wis3D(
             xyz_pattern=('x', 'y', 'z'),
             out_folder="dbg",
-            sequence="Oppo_loader",
+            sequence_name="Oppo_loader",
             # auto_increase=,
             # enable=,
         )
@@ -67,6 +67,7 @@ class OppoDatasetBase():
         for k, v in self.meta.items():
             imgid = v['file_path'].split('/')[-1]
             focal = 0.5 * v['calib_imgw'] / np.tan(0.5 * v['camera_angle_x'])  # original focal length
+            focal = focal * self.w / v['calib_imgw']
             directions = \
                 get_ray_directions(self.w, self.h, focal, focal, self.w // 2, self.h // 2).to(self.rank)  # (h, w, 3)
             self.directions.append(directions)
@@ -74,7 +75,7 @@ class OppoDatasetBase():
             c2w = c2w @ np.linalg.inv(blender2opencv)
             c2w = torch.FloatTensor(c2w)[:3, :4]
             self.all_c2w.append(c2w)
-            vis3d.add_camera_trajectory(torch.cat([c2w, torch.tensor([[0, 0, 0, 1]])], dim=0)[None])
+            wis3d.add_camera_trajectory(torch.cat([c2w, torch.tensor([[0, 0, 0, 1]])], dim=0)[None])
             img_path = os.path.join(self.config.root_dir, f"../Lights/013/raw_undistorted/{imgid}.JPG")
             img = Image.open(img_path)
             img = img.resize(self.img_wh, Image.BICUBIC)
@@ -84,6 +85,7 @@ class OppoDatasetBase():
             else:
                 mask_path = os.path.join(self.config.root_dir, f"obj_masks/{imgid}.png")
             mask = cv2.imread(mask_path, 2) > 0
+            mask = cv2.resize(mask.astype(np.uint8), self.img_wh, interpolation=cv2.INTER_NEAREST) > 0
             self.all_fg_masks.append(torch.from_numpy(mask).float())  # (h, w)
             self.all_images.append(img[..., :3])
         self.directions = torch.stack(self.directions, dim=0)
